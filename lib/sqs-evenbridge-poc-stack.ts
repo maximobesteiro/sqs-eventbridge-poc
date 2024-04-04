@@ -17,17 +17,50 @@ export class SqsEvenbridgePocStack extends cdk.Stack {
       visibilityTimeout: cdk.Duration.seconds(300),
     });
 
-    // Grant EventBridge permission to read from the queue
-    const eventBridgePrincipal = new iam.ServicePrincipal(
-      "events.amazonaws.com"
-    );
-    queue.grantConsumeMessages(eventBridgePrincipal);
+    // Event Bus
+    const eventBus = new events.EventBus(this, "EventBus");
+
+    // Source policy
+    const sourcePolicy = new iam.PolicyStatement({
+      actions: [
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+      ],
+      resources: [queue.queueArn],
+      effect: iam.Effect.ALLOW,
+    });
+
+    // Target policy
+    const targetPolicy = new iam.PolicyStatement({
+      actions: ["events:PutEvents"],
+      resources: [eventBus.eventBusArn],
+      effect: iam.Effect.ALLOW,
+    });
+
+    // Create a Pipe role
+    const pipeRole = new iam.Role(this, "PipeRole", {
+      assumedBy: new iam.ServicePrincipal("pipes.amazonaws.com"),
+    });
+
+    // Attach the policy to the role
+    pipeRole.addToPolicy(sourcePolicy);
+    pipeRole.addToPolicy(targetPolicy);
 
     // Create an EventBridge Pipe
-    const pipe = new pipes.Pipe(this, "MyPipe");
-    pipe.addEventSource(queue); // Attach the SQS queue as the source
+    const pipe = new pipes.CfnPipe(this, "SQSEventBridgePipe", {
+      roleArn: pipeRole.roleArn,
+      source: queue.queueArn,
+      sourceParameters: {
+        sqsQueueParameters: {
+          batchSize: 5,
+          maximumBatchingWindowInSeconds: 60,
+        },
+      },
+      target: eventBus.eventBusArn,
+    });
 
-    // Lambda Functions for type A and B
+    // Lambda Functions for type A
     const lambdaA = new lambda.Function(this, "LambdaA", {
       runtime: lambda.Runtime.NODEJS_16_X,
       code: lambda.Code.fromAsset("lambda"), // code loaded from "lambda" directory
@@ -35,6 +68,7 @@ export class SqsEvenbridgePocStack extends cdk.Stack {
       logRetention: logs.RetentionDays.ONE_WEEK, // Customize log retention
     });
 
+    // Lambda Functions for type B
     const lambdaB = new lambda.Function(this, "LambdaB", {
       runtime: lambda.Runtime.NODEJS_16_X,
       code: lambda.Code.fromAsset("lambda"), // code loaded from "lambda" directory
@@ -45,37 +79,39 @@ export class SqsEvenbridgePocStack extends cdk.Stack {
     // EventBridge Rule for type A events
     const ruleA = new events.Rule(this, "RuleA", {
       description: "Route events with type A to Lambda A",
+      eventBus: eventBus,
       eventPattern: {
         source: [queue.queueName],
         detail: {
           type: ["A"],
         },
       },
+      targets: [new targets.LambdaFunction(lambdaA)],
     });
-    ruleA.addTarget(new targets.LambdaFunction(lambdaA));
 
     // EventBridge Rule for type B events
     const ruleB = new events.Rule(this, "RuleB", {
       description: "Route events with type B to Lambda B",
+      eventBus: eventBus,
       eventPattern: {
-        source: [queue.queueName],
         detail: {
           type: ["B"],
         },
       },
-    });
-    ruleB.addTarget(new targets.LambdaFunction(lambdaB));
-
-    // EventBridge Rule for all events (logging)
-    const loggingRule = new events.Rule(this, "LoggingRule", {
-      description: "Log all events to CloudWatch",
-      eventPattern: {
-        source: [queue.queueName],
-      },
+      targets: [new targets.LambdaFunction(lambdaB)],
     });
 
     //  CloudWatch Log Group
     const logGroup = new logs.LogGroup(this, "EventBridgeLogs");
-    loggingRule.addTarget(new targets.CloudWatchLogGroup(logGroup));
+
+    // EventBridge Rule for all events (logging)
+    const loggingRule = new events.Rule(this, "LoggingRule", {
+      description: "Log all events to CloudWatch",
+      eventBus: eventBus,
+      eventPattern: {
+        source: [queue.queueName],
+      },
+      targets: [new targets.CloudWatchLogGroup(logGroup)],
+    });
   }
 }
