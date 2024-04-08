@@ -51,6 +51,17 @@ Rules defined in this stack will look for the `type` property:
 - If the type is `B`, the event will be passed to the `lambdaB` function
 - Every event will match a rule that just logs events to CloudWatch within the _event-bridge-logs_ log group.
 
+## Sending a message to SQS from the command line
+
+> [!NOTE]
+> Make sure to have AWS CLI locally installed and configured.
+
+To queue a message, run the following command in your terminal (replace the queue URL by looking for it in the AWS console):
+
+```console
+aws sqs send-message --queue-url=https://sqs.us-east-1.amazonaws.com/992382429717/SqsEvenbridgePocStack-eventqueue6D4A6A10-D5ZYUvzTCcMA --message-body '{ "type": "C", "data": { "adId": "12345", "source": "SSP1" }}'
+```
+
 ## Useful commands
 
 - `npm run build` compile typescript to js
