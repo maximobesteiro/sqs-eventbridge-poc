@@ -15,7 +15,7 @@ This example implementation is expecting an event defined as:
     "type": "A",
     "data": {
         "key": "value",
-        "key2": "value2"
+        "key2": "value2",
         ... // arbitrary data
     },
     "otherKey": "otherValue"
@@ -30,14 +30,14 @@ Once the pipe extracts this message from SQS, it will run a transformer on it be
     "type": "A",
     "data": {
         "key": "value",
-        "key2": "value2"
+        "key2": "value2",
         ... // arbitrary data
     },
     "originalEvent": {
         "type": "A",
         "data": {
             "key": "value",
-            "key2": "value2"
+            "key2": "value2",
             ... // arbitrary data
         },
         "otherKey": "otherValue"
